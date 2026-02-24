@@ -291,21 +291,103 @@ First, determine what the user wants:
 
 **Mode A: New Academic Presentation**
 - User wants to create slides from scratch for a talk, lecture, or defense
-- Proceed to Phase 1 (Content Discovery)
+- Proceed to Phase 0.5 (Essential Content Questions), then Phase 1 (Content Discovery)
 
-**Mode B: PPT/PDF Conversion**
-- User has an existing PowerPoint or PDF to convert to web slides
-- Proceed to Phase 4 (PPT Extraction)
+**Mode B: PPT/PDF/Paper Conversion**
+- User has an existing PowerPoint, PDF, or paper URL to convert to web slides
+- Proceed to Phase 4 (Content Extraction), then Phase 0.5, then Phase 1P (Paper Focus Discovery)
 
 **Mode C: Existing Presentation Enhancement**
 - User has an HTML presentation and wants to improve it
 - Read the existing file, understand the structure, then enhance
 
+### Fast-Path Detection
+
+If the user's initial message specifies enough to skip format questions (e.g., topic, approximate length, and/or theme name are all present), you MAY skip the format-mechanical questions in Phase 1 (purpose, length, content types, field). However, you MUST still run Phase 0.5 (Essential Content Questions) before generating. **No presentation should ever be generated without asking the Phase 0.5 questions.**
+
+**Examples of fast-path triggers:**
+- "/academic-slides 10-slide lecture on dynamic programming using Metropolis"
+- "/academic-slides conference talk on our ICML paper, Berlin theme"
+- "Make 15 slides about transformer attention for my lab meeting"
+
+In all of these cases, format is clear from context but content quality questions have not been answered. Proceed to Phase 0.5.
+
 ---
 
-## Phase 1: Content Discovery (New Presentations)
+## Phase 0.5: Essential Content Questions (MANDATORY)
 
-Before designing, understand the content. Ask via AskUserQuestion:
+**These questions MUST be asked before generating any presentation, regardless of mode or how much information the user provided in their initial message.** They cannot be inferred from topic or theme -- they require the user's judgment. Ask all 3 in a single AskUserQuestion call.
+
+### Why These Questions Matter
+
+A presentation on "transformer attention" for a room of NLP researchers looks completely different from one for undergraduate CS students. A talk where the takeaway is "our method is 3x faster" structures differently from one where the takeaway is "this theoretical framework unifies prior work." These questions determine content strategy, not just format.
+
+### The Questions (Single AskUserQuestion Call)
+
+**Question 1: Audience**
+- Header: "Audience"
+- Question: "Who is your audience?"
+- Options:
+  - "Domain experts" -- They know the field well; skip basics, focus on contributions and technical details
+  - "Technical but not specialist" -- They have technical background but are not in your exact subfield
+  - "Students / newcomers" -- They need context, definitions, and motivation before results
+  - "Mixed / general academic" -- Varies widely; balance accessibility with depth
+
+**Question 2: Key Takeaway**
+- Header: "Takeaway"
+- Question: "If the audience remembers ONE thing from your talk, what should it be?"
+- Options:
+  - "A specific result" -- A theorem, benchmark, or experimental finding (will ask you to state it)
+  - "A new method or technique" -- How to do something they could not do before
+  - "A conceptual framework" -- A way of thinking about a problem or connecting ideas
+  - "A problem or open question" -- Motivating future work or collaboration
+
+**Question 3: Narrative Arc**
+- Header: "Structure"
+- Question: "How should the presentation flow?"
+- Options:
+  - "Problem -> Solution -> Results" -- Classic research talk structure
+  - "Background -> Our Work -> Impact" -- Contextualizes contribution in the field
+  - "Survey / Comparison" -- Review multiple approaches, compare trade-offs
+  - "Build-up / Tutorial" -- Teach concepts progressively, layer by layer
+
+### Follow-Up: Key Result Statement
+
+If the user chose "A specific result" as their takeaway, follow up immediately:
+
+"Please state the key result in one sentence. This will be featured prominently in the slides."
+
+Store the user's response as the KEY_RESULT to place on a dedicated frame and echo in the conclusion frame.
+
+### How Answers Shape Content
+
+**Audience -> Depth calibration:**
+- "Domain experts" -> Skip introductory definitions, assume notation familiarity, spend frames on technical details and proofs, include comparison with prior work
+- "Technical but not specialist" -> Include 1-2 frames of background/notation, explain key terms on first use, focus on intuition before formalism
+- "Students / newcomers" -> Lead with motivation and examples, define all notation, use progressive disclosure heavily, include recap frames
+- "Mixed / general academic" -> Start accessible (motivation, big picture), add depth progressively, mark technical deep-dives as optional
+
+**Takeaway -> Emphasis strategy:**
+- "A specific result" -> Build the entire talk toward stating and supporting this result. Place it on a dedicated frame and repeat in conclusion.
+- "A new method or technique" -> Motivate the problem, then spend most frames on the method with worked examples. Include a summary frame with key steps.
+- "A conceptual framework" -> Start with the fragmented view (what existed before), then reveal the unifying framework. Use comparison frames.
+- "A problem or open question" -> Build evidence for why the problem matters, show what has been tried, end with the open question and potential directions.
+
+**Narrative Arc -> Frame sequencing:**
+- "Problem -> Solution -> Results" -> Title, Motivation/Problem (1-2 frames), Prior Work (1 frame), Our Approach (2-3 frames), Results (2-3 frames), Conclusion
+- "Background -> Our Work -> Impact" -> Title, Background (2-3 frames), Our Contribution (3-4 frames), Validation (1-2 frames), Impact/Future Work, Conclusion
+- "Survey / Comparison" -> Title, Overview/Taxonomy, Approach A, Approach B, Approach C, Comparison Table, Takeaways, Open Problems
+- "Build-up / Tutorial" -> Title, Prerequisites, Concept 1, Concept 2, Concept 3, Putting It Together, Examples, Summary
+
+---
+
+## Phase 1: Content Discovery (New Presentations -- Full Interactive Mode)
+
+**Prerequisite:** Phase 0.5 (Essential Content Questions) has already been completed.
+
+If the user is on the fast path (topic, length, and theme all known from initial message), skip this phase entirely -- Phase 0.5 has already captured what matters for quality. Proceed to Phase 2 (Style Discovery) or Phase 3 (Generate) as appropriate.
+
+For full interactive mode, ask the remaining format-detail questions via AskUserQuestion:
 
 ### Step 1.1: Presentation Context
 
@@ -354,6 +436,57 @@ Before designing, understand the content. Ask via AskUserQuestion:
   - "Humanities/Social Sciences" -- Economics, linguistics, philosophy
 
 If user has content, ask them to share it (text, bullet points, paper draft, etc.).
+
+---
+
+## Phase 1P: Paper Focus Discovery (Paper/URL Conversion Only)
+
+**This phase runs AFTER content extraction (Phase 4) and AFTER Phase 0.5, but BEFORE theme selection and generation.** It is specific to Mode B when the source is a research paper (PDF, arXiv URL, or paper file).
+
+After extracting and summarizing the paper content, ask via AskUserQuestion:
+
+### Step 1P.1: Focus and Coverage
+
+**Question 1: Paper Focus**
+- Header: "Focus"
+- Question: "Which aspects of the paper should the slides emphasize?"
+- multiSelect: true
+- Options:
+  - "Main results / theorems" -- The core contribution and its formal statement
+  - "Method / approach" -- How the technique works, algorithm details
+  - "Experiments / evaluation" -- Benchmarks, comparisons, ablations
+  - "Motivation / problem setup" -- Why this problem matters, background context
+
+**Question 2: Depth vs. Breadth**
+- Header: "Coverage"
+- Question: "How should the paper content be presented?"
+- Options:
+  - "Deep dive on key results" -- Focus 70% of frames on 1-2 main contributions, skip minor details
+  - "Balanced overview" -- Cover all sections roughly equally
+  - "Highlight reel" -- One frame per major point, emphasize the story arc
+  - "Extended with discussion" -- Include interpretation, limitations, and connections to other work
+
+**Question 3: What to Skip** (optional -- only ask if the paper is long or has many sections)
+- Header: "Skip"
+- Question: "Is there anything in the paper you want to skip or minimize?"
+- Options:
+  - "Related work section" -- Will handle comparisons verbally
+  - "Proofs and derivations" -- Just state results, skip formal proofs
+  - "Experimental details" -- Show headline numbers only, skip methodology
+  - "Nothing -- include everything relevant"
+
+### Content Directives for Paper Conversion
+
+Based on answers, apply these rules during generation:
+
+- **"Main results"** selected -> Dedicate 30-40% of frames to stating, illustrating, and supporting the main theorems/results. Create a dedicated "Main Result" frame with the theorem statement prominently displayed.
+- **"Method"** selected -> Include algorithm/pseudocode frames, step-by-step breakdowns. Use progressive disclosure for multi-step methods.
+- **"Experiments"** selected -> Create comparison tables, result highlight frames. Use two-column layouts for method-vs-baseline comparisons.
+- **"Motivation"** selected -> Lead with 2-3 problem motivation frames before any results.
+- **"Deep dive"** -> Allocate most frames to the selected focus areas. Other sections get at most 1 frame each.
+- **"Highlight reel"** -> Maximum 1 frame per section, focus on the narrative throughline.
+- **"Related work" skipped** -> Omit or compress to a single "Prior Work" frame with 3-4 key references.
+- **"Proofs" skipped** -> State theorems without proof. Add "Proof: see paper" annotation.
 
 ---
 
@@ -521,8 +654,26 @@ If "Mix elements", ask for specifics.
 ## Phase 3: Generate Presentation
 
 Now generate the full presentation based on:
-- Content from Phase 1
+- **Content quality directives** from Phase 0.5 (audience, takeaway, narrative arc)
+- Content details from Phase 1 (or inferred from fast-path)
+- Paper focus from Phase 1P (if Mode B)
 - Theme from Phase 2
+
+### Content Generation Rules
+
+**Apply audience calibration throughout:**
+- For "domain experts": no introductory definitions, assume standard notation, include technical depth
+- For "students/newcomers": define all terms, use examples before formalism, include recap frames
+- For "mixed": start accessible, deepen progressively
+
+**Structure frames according to narrative arc:**
+- Follow the frame sequencing template from Phase 0.5 based on the user's chosen arc
+- The KEY_RESULT (if provided) gets its own dedicated frame AND is echoed in the conclusion
+
+**For paper conversions, apply focus directives:**
+- Allocate frames according to the coverage choice from Phase 1P
+- Skip sections the user marked as skippable
+- When "deep dive" was chosen, spend 70% of frames on the focus areas
 
 ### File Structure
 
@@ -1396,6 +1547,15 @@ Convert the extracted content into the chosen theme, preserving:
 - Any speaker notes (as HTML comments or separate file)
 - Convert detected equations to KaTeX `$...$` or `$$...$$` syntax where possible
 
+### Step 4.5: Content Quality and Focus
+
+After extraction and confirmation, proceed to:
+1. **Phase 0.5** (Essential Content Questions) -- Ask about audience, takeaway, and narrative arc
+2. **Phase 1P** (Paper Focus Discovery) -- Ask what aspects of the paper to emphasize and what to skip
+3. **Phase 2** (Style Discovery) -- Select theme
+
+Then proceed to Phase 3 (Generate) with all directives applied.
+
 ---
 
 ## Phase 5: Delivery
@@ -1580,37 +1740,43 @@ Academic presentations use restrained, purposeful animation. The only entrance e
 
 ## Example Session Flows
 
-### Conference Talk
+### Conference Talk (Full Interactive)
 
 1. User: "I need slides for my ICML 2026 talk on attention mechanisms"
-2. Skill asks about purpose (Conference talk), length (Medium 10-20), content readiness, content types (Theorems, Equations), field (Computer Science)
-3. User shares their paper abstract and key results
-4. Skill asks about desired tone (Modern/Minimal)
-5. Skill generates 3 theme previews (Metropolis, Technical Report, Copenhagen)
-6. User picks Theme A (Metropolis), asks for darker header bars
-7. Skill generates full presentation with theorem environments and KaTeX equations
-8. Skill opens the presentation in browser
-9. User requests adjustments to specific frames
-10. Final presentation delivered
+2. **Phase 0.5:** Skill asks essential questions -- audience (domain experts), takeaway (a specific result: "our attention converges in O(sqrt(d))"), narrative arc (Problem -> Solution -> Results)
+3. Phase 1: Skill asks remaining format questions -- purpose (Conference talk), length (Medium 10-20), content types (Theorems, Equations), field (Computer Science)
+4. User shares their paper abstract and key results
+5. Phase 2: Skill asks about desired tone (Modern/Minimal)
+6. Skill generates 3 theme previews (Metropolis, Technical Report, Copenhagen)
+7. User picks Theme A (Metropolis), asks for darker header bars
+8. Skill generates presentation structured as Problem->Solution->Results, calibrated for domain experts, with the convergence theorem on a dedicated frame
+9. Final presentation delivered
 
-### Course Lecture
+### Fast-Path (Theme + Topic in Args)
 
-1. User: "Create lecture slides for my algorithms course, covering dynamic programming"
-2. Skill asks about purpose (Lecture/Course), length (Long 20+), content readiness (rough notes), content types (Algorithms, Equations), field (Computer Science)
-3. User shares their lecture outline and key algorithms
-4. Skill asks about desired tone (Clear/Pedagogical)
-5. Skill generates 3 theme previews (Berlin, Lecture Notes, Copenhagen)
-6. User picks Theme B (Lecture Notes)
-7. Skill generates full presentation with algorithm boxes and progressive disclosure for step-by-step walkthroughs
-8. Final presentation delivered
+1. User: "/academic-slides 10-slide lecture on dynamic programming using Lecture Notes"
+2. Skill detects fast path: length=10, purpose=lecture, theme=Lecture Notes, topic=dynamic programming
+3. **Phase 0.5 (still mandatory):** Skill asks -- audience (students/newcomers), takeaway (a new method/technique), narrative arc (build-up/tutorial)
+4. Skill generates 10-frame presentation using Lecture Notes theme, structured as a progressive tutorial, calibrated for students with definitions and examples before formalism
+5. Final presentation delivered
+
+### Paper-to-Slides (URL Provided)
+
+1. User: "/academic-slides convert this paper to slides: https://eprint.iacr.org/2025/236"
+2. Skill fetches and extracts paper content
+3. **Phase 0.5:** Skill asks -- audience (technical but not specialist), takeaway (a specific result), narrative arc (background -> our work -> impact)
+4. **Phase 1P:** Skill asks paper-specific questions -- focus (main results + method), coverage (deep dive on key results), skip (proofs and derivations)
+5. Phase 2: Skill asks about theme preference
+6. Skill generates presentation focused on main results and method, skipping proofs, calibrated for a technically literate but non-specialist audience
+7. Final presentation delivered
 
 ### PPT Conversion
 
 1. User: "Convert my research paper PPT to web slides"
 2. Skill extracts content and images from PPT, flags detected equation objects
 3. Skill confirms extracted content with user
-4. Skill asks about desired tone/theme
-5. Skill generates theme previews
+4. **Phase 0.5:** Skill asks essential content questions (audience, takeaway, arc)
+5. Skill asks about desired tone/theme
 6. User picks a theme
-7. Skill generates HTML presentation with preserved assets and equations converted to KaTeX
+7. Skill generates HTML presentation with preserved assets, equations converted to KaTeX, and content structured according to the chosen narrative arc
 8. Final presentation delivered
